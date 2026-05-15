@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import { useToast } from '../App';
 import { saveDraftFiles, loadDraftFiles, clearDraftFiles } from '../draftStorage';
+import SearchSidebar from '../components/SearchSidebar';
 import './PostsPage.css';
 
 const API = '/api';
@@ -36,9 +37,47 @@ function MediaModal({ file, onClose }) {
   );
 }
 
-function PostFiles({ files }) {
+function PostFiles({ files, searchQuery = '' }) {
   const [modalFile, setModalFile] = useState(null);
   if (!files || !files.length) return null;
+  
+  // Функция для выделения текста
+  const highlightText = (text, query) => {
+    if (!query || !text) return text;
+    
+    const lowerText = text.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    const parts = [];
+    let lastIndex = 0;
+    
+    while (true) {
+      const index = lowerText.indexOf(lowerQuery, lastIndex);
+      if (index === -1) break;
+      
+      // Добавляем текст до совпадения
+      parts.push(text.substring(lastIndex, index));
+      
+      // Добавляем выделенное совпадение
+      parts.push(
+        <mark key={index} style={{ 
+          backgroundColor: 'var(--accent)', 
+          color: '#fff', 
+          padding: '0 2px',
+          borderRadius: '2px'
+        }}>
+          {text.substring(index, index + query.length)}
+        </mark>
+      );
+      
+      lastIndex = index + query.length;
+    }
+    
+    // Добавляем оставшийся текст
+    parts.push(text.substring(lastIndex));
+    
+    return parts;
+  };
+  
   const mediaTypes = ['image', 'gif', 'video'];
   return (
     <div className="files-container">
@@ -59,14 +98,18 @@ function PostFiles({ files }) {
         if (file.file_type === 'audio') return (
           <div key={file.id} className="doc-file">
             <span className="doc-icon">🎵</span>
-            <span className="doc-name">{file.original_name}</span>
+            <span className="doc-name">
+              {searchQuery ? highlightText(file.original_name, searchQuery) : file.original_name}
+            </span>
             <audio controls src={file.file_url} style={{ marginLeft: 8, height: 28 }} />
           </div>
         );
         return (
           <div key={file.id} className="doc-file">
             <span className="doc-icon">{file.file_type === 'document' ? '📄' : '📎'}</span>
-            <span className="doc-name">{file.original_name}</span>
+            <span className="doc-name">
+              {searchQuery ? highlightText(file.original_name, searchQuery) : file.original_name}
+            </span>
             <span className="doc-size">({formatSize(file.size_bytes)})</span>
             <a href={file.file_url} download={file.original_name} className="btn-download-inline">⬇ Скачать</a>
           </div>
@@ -156,7 +199,25 @@ function CommentsSection({ post, user }) {
   const renderComment = (c, isReply = false) => (
     <div key={c.id} className={`comment ${c.deleted ? 'comment-deleted' : ''} ${isReply ? 'comment-reply' : ''}`}>
       {c.deleted ? (
-        <span className="comment-deleted-text">{c.deleted_by_admin ? '🚫 Удалено администратором' : 'Комментарий удалён'}</span>
+        <div className="comment-deleted-text">
+          {c.deleted_by_admin 
+            ? <div className="admin-delete-info">
+                <div className="admin-delete-header">
+                  <span className="admin-delete-icon">🚫</span>
+                  <span className="admin-delete-title">Удалено администратором</span>
+                </div>
+                {c.deleted_by_admin_name && (
+                  <div className="admin-delete-details">
+                    <span className="admin-delete-label">Администратор:</span>
+                    <span className="admin-delete-value">{c.deleted_by_admin_name}</span>
+                  </div>
+                )}
+                <div className="admin-delete-note">
+                  <small>Этот комментарий был удален администратором за нарушение правил сообщества.</small>
+                </div>
+              </div>
+            : 'Комментарий удалён'}
+        </div>
       ) : (
         <>
           <Link to={`/profile/${c.user_id}`} className="comment-author">
@@ -230,7 +291,8 @@ function CommentsSection({ post, user }) {
   );
 }
 
-function PostCard({ post, user, onDelete, onLike }) {
+function PostCard({ post, user, onDelete, onLike, searchQuery = '' }) {
+  const toast = useToast();
   const [showComments, setShowComments] = useState(false);
   const [likes, setLikes] = useState(post.likes_count);
   const [liked, setLiked] = useState(post.liked_by_me);
@@ -238,6 +300,43 @@ function PostCard({ post, user, onDelete, onLike }) {
   const cardRef = useRef(null);
   const viewedRef = useRef(false);
   const wsRef = useRef(null);
+
+  // Функция для выделения текста
+  const highlightText = (text, query) => {
+    if (!query || !text) return text;
+    
+    const lowerText = text.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    const parts = [];
+    let lastIndex = 0;
+    
+    while (true) {
+      const index = lowerText.indexOf(lowerQuery, lastIndex);
+      if (index === -1) break;
+      
+      // Добавляем текст до совпадения
+      parts.push(text.substring(lastIndex, index));
+      
+      // Добавляем выделенное совпадение
+      parts.push(
+        <mark key={index} style={{ 
+          backgroundColor: 'var(--accent)', 
+          color: '#fff', 
+          padding: '0 2px',
+          borderRadius: '2px'
+        }}>
+          {text.substring(index, index + query.length)}
+        </mark>
+      );
+      
+      lastIndex = index + query.length;
+    }
+    
+    // Добавляем оставшийся текст
+    parts.push(text.substring(lastIndex));
+    
+    return parts;
+  };
 
   useEffect(() => {
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
@@ -253,19 +352,20 @@ function PostCard({ post, user, onDelete, onLike }) {
 
   useEffect(() => {
     if (!cardRef.current || viewedRef.current) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !viewedRef.current) {
-          viewedRef.current = true;
-          addViewed(post.id);
-          if (user) axios.post(`${API}/posts/${post.id}/view`).catch(() => {});
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.5 }
-    );
-    observer.observe(cardRef.current);
-    return () => observer.disconnect();
+    // ВРЕМЕННО ОТКЛЮЧЕНО: автоматическое добавление в просмотренные
+    // const observer = new IntersectionObserver(
+    //   ([entry]) => {
+    //     if (entry.isIntersecting && !viewedRef.current) {
+    //       viewedRef.current = true;
+    //       addViewed(post.id);
+    //       if (user) axios.post(`${API}/posts/${post.id}/view`).catch(() => {});
+    //       observer.disconnect();
+    //     }
+    //   },
+    //   { threshold: 0.5 }
+    // );
+    // observer.observe(cardRef.current);
+    // return () => observer.disconnect();
   }, [post.id, user]);
 
   const handleLike = async () => {
@@ -284,15 +384,41 @@ function PostCard({ post, user, onDelete, onLike }) {
           {post.user_avatar
             ? <img src={post.user_avatar} alt="" className="post-avatar" />
             : <div className="post-avatar-placeholder">{post.username?.[0]?.toUpperCase()}</div>}
-          <span className="post-author">{post.username}</span>
+          <span className="post-author">
+            {searchQuery ? highlightText(post.username, searchQuery) : post.username}
+          </span>
         </Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Link to={`/posts/${post.id}`} className="post-permalink" title="Открыть пост отдельно">🔗</Link>
+          <button 
+            className="post-permalink" 
+            onClick={() => {
+              const url = `${window.location.origin}/posts/${post.id}`;
+              navigator.clipboard.writeText(url).then(() => {
+                toast('Ссылка скопирована в буфер обмена');
+              }).catch(() => {
+                // Fallback для старых браузеров
+                const textArea = document.createElement('textarea');
+                textArea.value = url;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                toast('Ссылка скопирована');
+              });
+            }}
+            title="Скопировать ссылку на пост"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: 'var(--text-muted)' }}
+          >
+            📋
+          </button>
+          <Link to={`/posts/${post.id}`} className="post-permalink" title="Открыть пост отдельно">📄</Link>
           <small className="post-date">{new Date(post.created_at).toLocaleString()}</small>
         </div>
       </div>
-      <p className="post-body">{post.body}</p>
-      <PostFiles files={post.files} />
+      <p className="post-body">
+        {searchQuery ? highlightText(post.body, searchQuery) : post.body}
+      </p>
+      <PostFiles files={post.files} searchQuery={searchQuery} />
       <div className="post-actions">
         {user ? (
           <button className={`btn-like ${liked ? 'liked' : ''}`} onClick={handleLike} title={`${likes} лайков`}>
@@ -326,6 +452,8 @@ export default function PostsPage({ singlePost }) {
   const toast = useToast();
   const [followed, setFollowed] = useState([]);
   const [others, setOthers] = useState([]);
+  const [allPosts, setAllPosts] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [form, setForm] = useState(() => {
     try { return JSON.parse(localStorage.getItem('draft_post')) || { body: '' }; }
     catch { return { body: '' }; }
@@ -338,12 +466,18 @@ export default function PostsPage({ singlePost }) {
   const fetchPosts = useCallback(async () => {
     if (singlePost) return;
     try {
-      const viewed = getViewed();
-      const viewedParam = [...viewed].join(',');
-      const { data } = await axios.get(`${API}/posts${viewedParam ? `?viewed=${viewedParam}` : ''}`);
+      const { data } = await axios.get(`${API}/posts`);
+      
+      console.log('[POSTS] Получено постов:', data);
+      console.log('[POSTS] followed:', data.followed?.length || 0);
+      console.log('[POSTS] others:', data.others?.length || 0);
+      
+      // НЕ фильтруем ничего - показываем ВСЕ посты
       setFollowed(data.followed || []);
       setOthers(data.others || []);
-    } catch {
+      setAllPosts([...(data.followed || []), ...(data.others || [])]);
+    } catch (err) {
+      console.error('[POSTS] Ошибка загрузки:', err);
       toast('Ошибка загрузки постов');
     }
   }, [singlePost, toast]);
@@ -381,11 +515,22 @@ export default function PostsPage({ singlePost }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    console.log('[POST] Начало создания поста...');
+    console.log('[POST] Текст:', form.body);
+    console.log('[POST] Файлов:', files.length);
+    
     try {
       const fd = new FormData();
       fd.append('body', form.body);
-      files.forEach(f => fd.append('files', f));
-      await axios.post(`${API}/posts`, fd);
+      files.forEach((f, i) => {
+        console.log(`[POST] Добавление файла ${i + 1}:`, f.name, f.size, 'bytes');
+        fd.append('files', f);
+      });
+      
+      console.log('[POST] Отправка запроса на /api/posts...');
+      const response = await axios.post(`${API}/posts`, fd);
+      console.log('[POST] Ответ получен:', response.status, response.data);
+      
       setForm({ body: '' });
       setFiles([]);
       setPreviews([]);
@@ -395,10 +540,19 @@ export default function PostsPage({ singlePost }) {
       toast('Пост опубликован ✓');
       fetchPosts();
     } catch (err) {
+      console.error('[POST] Ошибка создания поста:', err);
+      console.error('[POST] Статус ошибки:', err.response?.status);
+      console.error('[POST] Данные ошибки:', err.response?.data);
+      console.error('[POST] Сообщение:', err.message);
+      
       if (err.response?.status === 413) {
         toast('Файл слишком большой. Максимальный размер — 300 МБ.');
+      } else if (err.response?.status === 401) {
+        toast('Ошибка авторизации. Попробуйте войти заново.');
+      } else if (err.response?.data?.error) {
+        toast(`Ошибка: ${err.response.data.error}`);
       } else {
-        toast('Ошибка создания поста');
+        toast('Ошибка создания поста. Проверьте консоль для деталей.');
       }
     } finally {
       setLoading(false);
@@ -409,6 +563,7 @@ export default function PostsPage({ singlePost }) {
     await axios.delete(`${API}/posts/${id}`);
     setFollowed(prev => prev.filter(p => p.id !== id));
     setOthers(prev => prev.filter(p => p.id !== id));
+    setAllPosts(prev => prev.filter(p => p.id !== id));
     toast('Пост удалён');
   };
 
@@ -416,10 +571,77 @@ export default function PostsPage({ singlePost }) {
     const update = posts => posts.map(p => p.id === id ? { ...p, likes_count } : p);
     setFollowed(update);
     setOthers(update);
+    setAllPosts(update);
   };
 
+  // Функция для поиска постов
+  const searchPosts = (query) => {
+    if (!query.trim()) {
+      return { followed, others };
+    }
+    
+    const lowerQuery = query.toLowerCase();
+    const filtered = allPosts.filter(post => {
+      return (
+        post.username?.toLowerCase().includes(lowerQuery) ||
+        post.body?.toLowerCase().includes(lowerQuery) ||
+        post.files?.some(file => 
+          file.original_name?.toLowerCase().includes(lowerQuery)
+        )
+      );
+    });
+    
+    // Разделяем на подписки и остальные
+    const followedIds = new Set(followed.map(p => p.id));
+    const filteredFollowed = filtered.filter(p => followedIds.has(p.id));
+    const filteredOthers = filtered.filter(p => !followedIds.has(p.id));
+    
+    return { followed: filteredFollowed, others: filteredOthers };
+  };
+
+  // Функция для выделения текста в результатах поиска
+  const highlightText = (text, query) => {
+    if (!query || !text) return text;
+    
+    const lowerText = text.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    const parts = [];
+    let lastIndex = 0;
+    
+    while (true) {
+      const index = lowerText.indexOf(lowerQuery, lastIndex);
+      if (index === -1) break;
+      
+      // Добавляем текст до совпадения
+      parts.push(text.substring(lastIndex, index));
+      
+      // Добавляем выделенное совпадение
+      parts.push(
+        <mark key={index} style={{ 
+          backgroundColor: 'var(--accent)', 
+          color: '#fff', 
+          padding: '0 2px',
+          borderRadius: '2px'
+        }}>
+          {text.substring(index, index + query.length)}
+        </mark>
+      );
+      
+      lastIndex = index + query.length;
+    }
+    
+    // Добавляем оставшийся текст
+    parts.push(text.substring(lastIndex));
+    
+    return parts;
+  };
+
+  const { followed: filteredFollowed, others: filteredOthers } = searchPosts(searchQuery);
+
   return (
-    <div className="posts-wrap">
+    <>
+      {!singlePost && <SearchSidebar searchQuery={searchQuery} setSearchQuery={setSearchQuery} resultsCount={filteredFollowed.length + filteredOthers.length} />}
+      <div className="posts-wrap" style={{ marginLeft: !singlePost ? '280px' : '0' }}>
       {singlePost ? (
         <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)' }}>
           <Link to="/" style={{ color: 'var(--text-muted)', fontSize: 14 }}>← Все посты</Link>
@@ -464,18 +686,24 @@ export default function PostsPage({ singlePost }) {
         </>
       )}
 
-      {!singlePost && followed.length > 0 && (
+      {!singlePost && filteredFollowed.length > 0 && (
         <>
-          <div className="feed-divider">📌 Подписки</div>
-          {followed.map(post => (
-            <PostCard key={post.id} post={post} user={user} onDelete={handleDelete} onLike={handleLike} />
+          <div className="feed-divider">📌 Подписки {searchQuery && `(поиск: "${searchQuery}")`}</div>
+          {filteredFollowed.map(post => (
+            <PostCard key={post.id} post={post} user={user} onDelete={handleDelete} onLike={handleLike} searchQuery={searchQuery} />
           ))}
-          <div className="feed-divider">🌐 Все посты</div>
+          <div className="feed-divider">🌐 Все посты {searchQuery && `(поиск: "${searchQuery}")`}</div>
         </>
       )}
-      {others.map(post => (
-        <PostCard key={post.id} post={post} user={user} onDelete={handleDelete} onLike={handleLike} />
+      {filteredOthers.map(post => (
+        <PostCard key={post.id} post={post} user={user} onDelete={handleDelete} onLike={handleLike} searchQuery={searchQuery} />
       ))}
-    </div>
+      {searchQuery && filteredFollowed.length === 0 && filteredOthers.length === 0 && (
+        <div style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)' }}>
+          По запросу "{searchQuery}" ничего не найдено
+        </div>
+      )}
+      </div>
+    </>
   );
 }

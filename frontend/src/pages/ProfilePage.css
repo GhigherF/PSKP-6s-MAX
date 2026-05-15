@@ -1,4 +1,20 @@
-.profile-wrap { max-width: 600px; margin: 0 auto; border-left: 1px solid var(--border); border-right: 1px solid var(--border); min-height: 100vh; padding-bottom: 40px; }
+/* Profile Layout */
+.profile-layout {
+  display: flex;
+  min-height: calc(100vh - 60px);
+  position: relative;
+}
+
+.profile-wrap { 
+  flex: 1;
+  margin-left: 280px;
+  max-width: 900px;
+  border-left: 1px solid var(--border); 
+  border-right: 1px solid var(--border); 
+  min-height: 100vh; 
+  padding-bottom: 40px;
+  background: var(--bg);
+}
 .profile-error { padding: 20px; color: var(--danger); }
 .profile-loading { padding: 20px; color: var(--text-muted); }
 
@@ -14,13 +30,15 @@
 
 .profile-avatar {
   width: 80px; height: 80px;
-  border-radius: 50%; object-fit: cover;
+  border-radius: 16px; 
+  object-fit: cover;
+  object-position: center;
   border: 3px solid var(--bg);
   outline: 2px solid var(--border);
 }
 
 .profile-avatar-placeholder {
-  width: 80px; height: 80px; border-radius: 50%;
+  width: 80px; height: 80px; border-radius: 16px;
   background: var(--accent); color: #fff;
   font-size: 32px; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
@@ -35,11 +53,69 @@
 }
 .profile-email { color: var(--text-muted); font-size: 14px; margin: 2px 0; }
 .profile-email-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.btn-email-stub {
-  padding: 3px 10px; font-size: 12px; border: 1px solid var(--border);
-  border-radius: 12px; background: none; color: var(--text-muted);
-  cursor: not-allowed; opacity: 0.6;
+
+.btn-email-change {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
+
+.btn-email-change:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-email-change:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn-email-change:active {
+  transform: translateY(1px);
+}
+
+/* Specific styles for header button */
+.profile-email-row .btn-email-change {
+  padding: 4px 12px;
+  font-size: 13px;
+}
+
+/* Specific styles for edit form button */
+.edit-email-row .btn-email-change {
+  align-self: flex-end;
+  height: 42px; /* Match input height */
+  white-space: nowrap;
+}
+
+/* Responsive design for mobile */
+@media (max-width: 480px) {
+  .btn-email-change {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+  
+  .profile-email-row .btn-email-change {
+    padding: 3px 8px;
+    font-size: 12px;
+  }
+  
+  .edit-email-row .btn-email-change {
+    height: 38px;
+    padding: 6px 10px;
+  }
+}
+
+
 .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .profile-date { color: var(--text-muted); font-size: 13px; margin: 2px 0; }
 
@@ -137,15 +213,110 @@
 }
 
 .avatar-preview-wrap { display: flex; align-items: center; gap: 14px; margin-bottom: 4px; }
-.avatar-preview { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); }
+.avatar-preview { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; border: 2px solid var(--border); }
 .avatar-preview-placeholder {
-  width: 64px; height: 64px; border-radius: 50%;
+  width: 64px; height: 64px; border-radius: 12px;
   background: var(--accent); color: #fff; font-size: 24px; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
 }
 
 .edit-ok { color: #00ba7c; font-size: 13px; }
 .edit-err { color: var(--danger); font-size: 13px; }
+
+/* Followers & Following */
+.profile-followers, .profile-following {
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-follower-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+
+.profile-follower-item:hover {
+  background: var(--bg-hover);
+}
+
+.profile-follower-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--text);
+  flex: 1;
+}
+
+.profile-follower-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 2px solid var(--border);
+}
+
+.profile-follower-avatar-placeholder {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.profile-follower-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-follower-nick {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.profile-follower-date {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.btn-subscribe-small {
+  padding: 6px 14px;
+  background: var(--text);
+  color: var(--bg);
+  border: none;
+  border-radius: 16px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+
+.btn-subscribe-small:hover {
+  opacity: 0.9;
+}
+
+.btn-subscribe-small.subscribed {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-subscribe-small.subscribed:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: var(--danger-bg);
+}
 
 .edit-email-row {
   display: flex;
@@ -156,19 +327,7 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
-.btn-email-change-stub {
-  padding: 9px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--text-muted);
-  cursor: not-allowed;
-  opacity: 0.6;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
+/* .btn-email-change-stub is deprecated - use .btn-email-change instead */
 
 /* File chooser */
 .profile-edit-form .file-chooser {
@@ -193,4 +352,681 @@
 
 .profile-edit-form .file-chooser-btn:hover {
   opacity: 0.9;
+}
+/* Email Change Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-content {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: slideIn 0.2s ease;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.modal-close-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.form-instruction {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.form-help {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.form-error {
+  padding: 10px 12px;
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  color: var(--danger);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.form-success {
+  padding: 10px 12px;
+  background: var(--success-bg);
+  border: 1px solid var(--success);
+  border-radius: 6px;
+  color: var(--success);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.dev-token-display {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.dev-token-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0 0 8px 0;
+}
+
+.dev-token-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.dev-token {
+  flex: 1;
+  font-family: monospace;
+  font-size: 12px;
+  padding: 6px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.copy-token-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.copy-token-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.action-group {
+  display: flex;
+  gap: 8px;
+}
+
+.modal-btn-primary,
+.modal-btn-secondary {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.modal-btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.modal-btn-primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.modal-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modal-btn-secondary {
+  background: var(--bg-card);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.modal-btn-secondary:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.modal-btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { transform: translateY(-20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@media (max-width: 480px) {
+  .modal-content {
+    width: 95%;
+    margin: 10px;
+  }
+  
+  .modal-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .action-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .modal-btn-primary,
+  .modal-btn-secondary {
+    flex: 1;
+    text-align: center;
+  }
+}
+.dev-token-help {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* User Posts Tab */
+.user-posts-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.user-post-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  transition: all 0.2s;
+}
+
+.user-post-card:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-light);
+}
+
+.user-post-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.user-post-link {
+  text-decoration: none;
+  color: var(--text);
+}
+
+.user-post-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.user-post-stats {
+  display: flex;
+  gap: 12px;
+}
+
+.user-post-stat {
+  font-size: 13px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.user-post-body {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.user-post-files {
+  margin-bottom: 12px;
+}
+
+.user-post-files-count {
+  font-size: 13px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.user-post-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.user-post-view-btn {
+  padding: 8px 16px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.user-post-view-btn:hover {
+  opacity: 0.9;
+  text-decoration: none;
+}
+
+.user-post-delete-btn {
+  padding: 8px 16px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.user-post-delete-btn:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* Profile Sidebar - Brutalist Style */
+.profile-sidebar {
+  position: fixed;
+  left: 0;
+  top: 60px;
+  width: 280px;
+  height: calc(100vh - 60px);
+  background: var(--bg-card);
+  border-right: 2px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  z-index: 90;
+}
+
+.profile-sidebar-header {
+  padding: 24px 20px;
+  border-bottom: 2px solid var(--border);
+  background: var(--bg);
+}
+
+.profile-sidebar-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+}
+
+.profile-sidebar-nav {
+  flex: 1;
+  padding: 8px 0;
+  overflow-y: auto;
+}
+
+.profile-sidebar-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px;
+  background: none;
+  border: none;
+  border-left: 3px solid transparent;
+  color: var(--text-muted);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+}
+
+.profile-sidebar-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.profile-sidebar-btn.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-left-color: var(--accent);
+  font-weight: 700;
+}
+
+.profile-sidebar-icon {
+  font-size: 20px;
+  width: 24px;
+  text-align: center;
+}
+
+.profile-sidebar-label {
+  flex: 1;
+}
+
+/* Notification Panel - Side Trigger */
+.notif-panel-trigger {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 120px;
+  background: var(--border);
+  cursor: pointer;
+  z-index: 150;
+  transition: all 0.2s;
+  border-radius: 4px 0 0 4px;
+}
+
+.notif-panel-trigger:hover {
+  width: 12px;
+  background: var(--accent);
+}
+
+.notif-panel-trigger.has-unread {
+  background: var(--danger);
+  width: 12px;
+  animation: pulse 2s infinite;
+}
+
+.notif-panel-badge {
+  position: absolute;
+  top: 50%;
+  left: -20px;
+  transform: translateY(-50%);
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border: 2px solid var(--bg);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.notif-panel {
+  position: fixed;
+  right: -400px;
+  top: 60px;
+  width: 400px;
+  height: calc(100vh - 60px);
+  background: var(--bg-card);
+  border-left: 2px solid var(--border);
+  z-index: 200;
+  transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow);
+}
+
+.notif-panel.open {
+  right: 0;
+}
+
+.notif-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 2px solid var(--border);
+  background: var(--bg);
+}
+
+.notif-panel-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--text);
+}
+
+.notif-panel-close {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+  font-weight: 600;
+}
+
+.notif-panel-close:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.notif-panel-content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.notif-panel-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.notif-panel-item {
+  padding: 20px;
+  border-bottom: 2px solid var(--border);
+  position: relative;
+  transition: background 0.2s;
+}
+
+.notif-panel-item:hover {
+  background: var(--bg-hover);
+}
+
+.notif-panel-item.unread {
+  background: var(--accent-bg);
+  border-left: 4px solid var(--accent);
+}
+
+.notif-panel-msg {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.6;
+  margin-bottom: 8px;
+  padding-right: 30px;
+  font-weight: 500;
+}
+
+.notif-panel-time {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.notif-panel-del {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.notif-panel-del:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+/* Brutalist Updates */
+.profile-header {
+  border-bottom: 2px solid var(--border);
+}
+
+.profile-avatar {
+  border-radius: 16px;
+  border: 2px solid var(--border);
+  outline: none;
+}
+
+.profile-avatar-placeholder {
+  border-radius: 16px;
+}
+
+.stat-card {
+  border-radius: var(--radius);
+  border: 2px solid var(--border);
+}
+
+.chart-block {
+  border-radius: var(--radius);
+  border: 2px solid var(--border);
+}
+
+.btn-subscribe {
+  border-radius: var(--radius);
+}
+
+.btn-subscribe.subscribed {
+  border: 1px solid var(--border);
+}
+
+.profile-comment-item, .profile-view-item {
+  border-bottom: 1px solid var(--border);
+}
+
+.profile-follower-avatar {
+  border-radius: 12px;
+  border: 2px solid var(--border);
+}
+
+.profile-follower-avatar-placeholder {
+  border-radius: 12px;
+}
+
+.btn-subscribe-small {
+  border-radius: var(--radius);
+}
+
+.btn-subscribe-small.subscribed {
+  border: 1px solid var(--border);
+}
+
+.user-post-card {
+  border-radius: var(--radius);
+  border: 2px solid var(--border);
+}
+
+.chart-period-btn {
+  border-radius: var(--radius-sm);
+}
+
+.chart-period-btn.active {
+  border-radius: var(--radius-sm);
 }

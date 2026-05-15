@@ -10,9 +10,33 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const validatePassword = (password) => {
+    if (password.length < 8) {
+      return 'Пароль должен содержать минимум 8 символов';
+    }
+    if (!/[a-z]/.test(password)) {
+      return 'Пароль должен содержать хотя бы одну строчную букву';
+    }
+    if (!/[A-Z]/.test(password)) {
+      return 'Пароль должен содержать хотя бы одну заглавную букву';
+    }
+    if (!/\d/.test(password)) {
+      return 'Пароль должен содержать хотя бы одну цифру';
+    }
+    return null;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    
+    // Валидация пароля
+    const passwordError = validatePassword(form.password);
+    if (passwordError) {
+      setError(passwordError);
+      return;
+    }
+    
     setLoading(true);
     try {
       await register(form.nick, form.email, form.password);
@@ -40,7 +64,7 @@ export default function RegisterPage() {
           className="auth-input"
         />
         <input
-          type="password" placeholder="Пароль (мин. 6 символов)" required minLength={6}
+          type="password" placeholder="Пароль (мин. 8 символов, заглавная, строчная, цифра)" required
           value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
           className="auth-input"
         />

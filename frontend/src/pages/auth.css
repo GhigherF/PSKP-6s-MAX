@@ -35,7 +35,7 @@
   background: var(--text);
   color: var(--bg);
   border: none;
-  border-radius: 20px;
+  border-radius: var(--radius);
   cursor: pointer;
   font-size: 15px;
   font-weight: 700;

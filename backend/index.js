@@ -11,6 +11,7 @@ const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { WebSocketServer } = require('ws');
+const nodemailer = require('nodemailer');
 const authMiddleware = require('./middleware/auth');
 
 const app = express();
@@ -28,6 +29,65 @@ const pool = new Pool({
   password: process.env.PGPASSWORD || 'postgres',
   database: process.env.PGDATABASE || 'microblog',
 });
+
+// EmailJS для отправки email через HTTPS API (работает из Docker)
+const axios = require('axios');
+
+async function sendEmailChangeVerification(toEmail, token, newEmail) {
+  console.log(`[EMAIL] Отправка на ${toEmail} через EmailJS API`);
+  
+  const data = {
+    service_id: process.env.EMAILJS_SERVICE_ID,
+    template_id: process.env.EMAILJS_TEMPLATE_ID,
+    user_id: process.env.EMAILJS_PUBLIC_KEY,
+    accessToken: process.env.EMAILJS_PRIVATE_KEY,
+    template_params: {
+      // Пробуем разные варианты имён переменных
+      to_email: toEmail,
+      to_name: toEmail.split('@')[0],
+      user_email: toEmail,
+      reply_to: toEmail,
+      from_name: 'Micro Blog',
+      name: 'Micro Blog',
+      email: toEmail,  // Reply To
+      subject: 'Подтверждение смены Email - Micro Blog',
+      new_email: newEmail,
+      token: token
+    }
+  };
+  
+  try {
+    console.log(`[EMAIL] Отправка через EmailJS...`);
+    console.log(`[EMAIL] Service ID: ${data.service_id}`);
+    console.log(`[EMAIL] Template ID: ${data.template_id}`);
+    console.log(`[EMAIL] Template params:`, JSON.stringify({ ...data.template_params, token: 'HIDDEN' }));
+    const response = await axios.post('https://api.emailjs.com/api/v1.0/email/send', data, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 15000
+    });
+    console.log(`[EMAIL] ✅ Ответ от API:`, response.status, response.statusText);
+    console.log(`[EMAIL] ✅ Письмо отправлено на ${toEmail}`);
+    return true;
+  } catch (err) {
+    console.error(`[EMAIL] ❌ Ошибка отправки: ${err.message}`);
+    if (err.response) {
+      console.error(`[EMAIL] Response status: ${err.response.status}`);
+      console.error(`[EMAIL] Response data:`, JSON.stringify(err.response.data));
+      console.error(`[EMAIL] ⚠️ ПРОВЕРЬ: В EmailJS шаблоне в поле 'To Email' должно быть одно из: {{to_email}} или {{user_email}} или {{email}}`);
+    }
+    return false;
+  }
+}
+
+async function sendEmailChangeConfirmation(oldEmail, newEmail) {
+  console.log(`[EMAIL] Отправка confirmation писем`);
+  return true;
+}
+
+// Temporary storage for email verification tokens: token -> { user_id, new_email, expires }
+const emailTokens = new Map();
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOADS_DIR),
@@ -85,8 +145,21 @@ app.post('/auth/register', async (req, res) => {
   const { nick, email, password } = req.body;
   if (!nick || !email || !password)
     return res.status(400).json({ error: 'nick, email и password обязательны' });
-  if (password.length < 6)
-    return res.status(400).json({ error: 'Пароль минимум 6 символов' });
+  
+  // Валидация пароля
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'Пароль должен содержать минимум 8 символов' });
+  }
+  if (!/[a-z]/.test(password)) {
+    return res.status(400).json({ error: 'Пароль должен содержать хотя бы одну строчную букву' });
+  }
+  if (!/[A-Z]/.test(password)) {
+    return res.status(400).json({ error: 'Пароль должен содержать хотя бы одну заглавную букву' });
+  }
+  if (!/\d/.test(password)) {
+    return res.status(400).json({ error: 'Пароль должен содержать хотя бы одну цифру' });
+  }
+  
   try {
     const hashed_password = await bcrypt.hash(password, 10);
     const { rows } = await pool.query(
@@ -202,7 +275,9 @@ app.get('/posts', async (req, res) => {
       `SELECT p.*, u.nick AS username, u.avatar_url AS user_avatar
        FROM posts p JOIN users u ON p.user_id = u.id
        WHERE p.deleted = FALSE
-       ORDER BY p.created_at DESC`
+       ${viewerId ? 'AND p.user_id != $1' : ''}
+       ORDER BY p.created_at DESC`,
+      viewerId ? [viewerId] : []
     );
 
     const enriched = await enrichPosts(posts, viewerId);
@@ -639,6 +714,28 @@ app.get('/users/:id/comments', async (req, res) => {
   }
 });
 
+// GET /users/:id/posts — посты пользователя
+app.get('/users/:id/posts', async (req, res) => {
+  try {
+    const viewerId = req.headers['authorization']
+      ? (() => { try { return jwt.verify(req.headers['authorization'].slice(7), process.env.JWT_SECRET).user_id; } catch { return null; } })()
+      : null;
+
+    const { rows: posts } = await pool.query(
+      `SELECT p.*, u.nick AS username, u.avatar_url AS user_avatar
+       FROM posts p JOIN users u ON p.user_id = u.id
+       WHERE p.user_id = $1 AND p.deleted = FALSE
+       ORDER BY p.created_at DESC`,
+      [req.params.id]
+    );
+
+    const enriched = await enrichPosts(posts, viewerId);
+    res.json(enriched);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /users/:id/activity — активность по дням за последние 30 дней
 app.get('/users/:id/activity', async (req, res) => {
   try {
@@ -682,5 +779,326 @@ app.get('/users/:id/views', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /users/:id/followers — список подписчиков
+app.get('/users/:id/followers', async (req, res) => {
+  try {
+    const viewerId = req.headers['authorization']
+      ? (() => { try { return jwt.verify(req.headers['authorization'].slice(7), process.env.JWT_SECRET).user_id; } catch { return null; } })()
+      : null;
+
+    const { rows: followers } = await pool.query(
+      `SELECT u.id, u.nick, u.avatar_url, u.created_at
+       FROM users u
+       JOIN subscriptions s ON u.id = s.follower_id
+       WHERE s.followee_id = $1
+       ORDER BY s.created_at DESC`,
+      [req.params.id]
+    );
+
+    // Проверяем, подписан ли текущий пользователь на этих подписчиков
+    if (viewerId) {
+      const followerIds = followers.map(f => f.id);
+      if (followerIds.length > 0) {
+        const { rows: subs } = await pool.query(
+          'SELECT followee_id FROM subscriptions WHERE follower_id = $1 AND followee_id = ANY($2)',
+          [viewerId, followerIds]
+        );
+        const followingSet = new Set(subs.map(r => r.followee_id));
+        return res.json(followers.map(f => ({ ...f, is_following: followingSet.has(f.id) })));
+      }
+    }
+
+    res.json(followers.map(f => ({ ...f, is_following: false })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /users/:id/following — список подписок
+app.get('/users/:id/following', async (req, res) => {
+  try {
+    const viewerId = req.headers['authorization']
+      ? (() => { try { return jwt.verify(req.headers['authorization'].slice(7), process.env.JWT_SECRET).user_id; } catch { return null; } })()
+      : null;
+
+    const { rows: following } = await pool.query(
+      `SELECT u.id, u.nick, u.avatar_url, u.created_at
+       FROM users u
+       JOIN subscriptions s ON u.id = s.followee_id
+       WHERE s.follower_id = $1
+       ORDER BY s.created_at DESC`,
+      [req.params.id]
+    );
+
+    // Проверяем, подписан ли текущий пользователь на этих пользователей
+    if (viewerId) {
+      const followingIds = following.map(f => f.id);
+      if (followingIds.length > 0) {
+        const { rows: subs } = await pool.query(
+          'SELECT followee_id FROM subscriptions WHERE follower_id = $1 AND followee_id = ANY($2)',
+          [viewerId, followingIds]
+        );
+        const followingSet = new Set(subs.map(r => r.followee_id));
+        return res.json(following.map(f => ({ ...f, is_following: followingSet.has(f.id) })));
+      }
+    }
+
+    res.json(following.map(f => ({ ...f, is_following: false })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => console.log(`Backend запущен на порту ${PORT}`));
+
+// ─── EMAIL CHANGE ─────────────────────────────────────────────────────────────
+
+// Helper function for email validation
+function isValidEmail(email) {
+  if (!email || typeof email !== 'string') return false;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  // Additional check to prevent double dots and other invalid patterns
+  if (email.includes('..')) return false;
+  if (email.startsWith('.') || email.endsWith('.')) return false;
+  if (email.split('@')[0].endsWith('.')) return false;
+  return emailRegex.test(email);
+}
+
+// Rate limiting store (in-memory for simplicity, could be moved to Redis in production)
+const rateLimitStore = new Map();
+
+function checkRateLimit(userId) {
+  const now = Date.now();
+  const hourAgo = now - 60 * 60 * 1000; // 1 hour in milliseconds
+  
+  if (!rateLimitStore.has(userId)) {
+    rateLimitStore.set(userId, []);
+  }
+  
+  const userRequests = rateLimitStore.get(userId);
+  // Remove requests older than 1 hour
+  const recentRequests = userRequests.filter(timestamp => timestamp > hourAgo);
+  
+  if (recentRequests.length >= 3) {
+    return false; // Rate limit exceeded
+  }
+  
+  // Add current request
+  recentRequests.push(now);
+  rateLimitStore.set(userId, recentRequests);
+  return true;
+}
+
+// POST /api/users/me/email-change-request — request email change with verification
+app.post('/users/me/email-change-request', authMiddleware, async (req, res) => {
+  try {
+    const { new_email } = req.body;
+    const userId = req.user.id;
+    
+    // Validate request body
+    if (!new_email) {
+      return res.status(400).json({ success: false, error: 'New email is required' });
+    }
+    
+    // Validate email format
+    if (!isValidEmail(new_email)) {
+      return res.status(400).json({ success: false, error: 'Invalid email format' });
+    }
+    
+    // Check rate limiting (3 requests per hour)
+    if (!checkRateLimit(userId)) {
+      return res.status(429).json({ 
+        success: false, 
+        error: 'Too many requests. Please try again in an hour.' 
+      });
+    }
+    
+    // Get current user email
+    const { rows: userRows } = await pool.query(
+      'SELECT email FROM users WHERE id = $1',
+      [userId]
+    );
+    
+    if (!userRows.length) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    
+    const currentEmail = userRows[0].email;
+    
+    // Check if new email is different from current email
+    if (new_email.toLowerCase() === currentEmail.toLowerCase()) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'New email must be different from current email' 
+      });
+    }
+    
+    // Check if email already exists in users table
+    const { rows: existingUserRows } = await pool.query(
+      'SELECT id FROM users WHERE email = $1',
+      [new_email.toLowerCase()]
+    );
+    
+    if (existingUserRows.length > 0) {
+      return res.status(409).json({ 
+        success: false, 
+        error: 'Email already registered' 
+      });
+    }
+    
+    // Generate JWT token with 24-hour expiration
+    const tokenPayload = {
+      user_id: userId,
+      new_email: new_email.toLowerCase(),
+      type: 'email_change'
+    };
+    
+    const token = jwt.sign(
+      tokenPayload,
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+    
+    // Store token in email_change_tokens table
+    await pool.query(
+      `INSERT INTO email_change_tokens (user_id, new_email, token, expires_at) 
+       VALUES ($1, $2, $3, NOW() + INTERVAL '24 hours')`,
+      [userId, new_email.toLowerCase(), token]
+    );
+    
+    console.log(`[AUDIT] Email change requested for user ${userId}: ${currentEmail} -> ${new_email}`);
+    
+    const emailSent = await sendEmailChangeVerification(new_email, token, new_email);
+    console.log(`[EMAIL] Email sent status: ${emailSent}`);
+
+    res.json({
+      success: true,
+      message: emailSent ? 'Письмо отправлено на новый email' : 'Токен создан (письмо не отправлено)',
+      email_sent: emailSent
+    });
+    
+  } catch (err) {
+    console.error('Error in email change request:', err);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// POST /api/users/me/email-change-confirm — confirm email change with token
+app.post('/users/me/email-change-confirm', authMiddleware, async (req, res) => {
+  try {
+    const { token } = req.body;
+    const userId = req.user.id;
+    
+    // Validate request body
+    if (!token) {
+      return res.status(400).json({ success: false, error: 'Token is required' });
+    }
+    
+    // Verify JWT token
+    let tokenPayload;
+    try {
+      tokenPayload = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      return res.status(400).json({ success: false, error: 'Invalid or expired token' });
+    }
+    
+    // Check token type
+    if (tokenPayload.type !== 'email_change') {
+      return res.status(400).json({ success: false, error: 'Invalid token type' });
+    }
+    
+    // Check token matches current user
+    if (tokenPayload.user_id !== userId) {
+      return res.status(403).json({ success: false, error: 'Token does not match current user' });
+    }
+    
+    // Check if token exists in database and is not expired
+    const { rows: tokenRows } = await pool.query(
+      `SELECT * FROM email_change_tokens 
+       WHERE token = $1 AND user_id = $2 AND expires_at > NOW()`,
+      [token, userId]
+    );
+    
+    if (tokenRows.length === 0) {
+      return res.status(400).json({ success: false, error: 'Invalid or expired token' });
+    }
+    
+    const tokenRecord = tokenRows[0];
+    const newEmail = tokenRecord.new_email;
+    
+    // Check if email still available (in case another user registered it since request)
+    const { rows: existingUserRows } = await pool.query(
+      'SELECT id FROM users WHERE email = $1',
+      [newEmail]
+    );
+    
+    if (existingUserRows.length > 0) {
+      // Clean up token since it can't be used
+      await pool.query('DELETE FROM email_change_tokens WHERE token = $1', [token]);
+      return res.status(409).json({ 
+        success: false, 
+        error: 'Email already registered. Please request a new email change.' 
+      });
+    }
+    
+    // Get old email before updating
+    const { rows: oldUserRows } = await pool.query(
+      'SELECT email FROM users WHERE id = $1',
+      [userId]
+    );
+    
+    if (oldUserRows.length === 0) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    
+    const oldEmail = oldUserRows[0].email;
+    
+    // Start transaction for user update and token cleanup
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      // Update user email
+      const { rows: updatedUserRows } = await client.query(
+        `UPDATE users SET email = $1 WHERE id = $2 
+         RETURNING id, nick, email, role, avatar_url, created_at`,
+        [newEmail, userId]
+      );
+      
+      if (updatedUserRows.length === 0) {
+        throw new Error('User not found');
+      }
+      
+      // Delete used token
+      await client.query('DELETE FROM email_change_tokens WHERE token = $1', [token]);
+      
+      await client.query('COMMIT');
+      
+      const updatedUser = updatedUserRows[0];
+      
+      console.log(`[AUDIT] Email changed for user ${userId}: ${oldEmail} -> ${newEmail}`);
+      
+      sendEmailChangeConfirmation(oldEmail, newEmail).catch(err => {
+        console.error('[EMAIL] Ошибка отправки confirmation:', err);
+      });
+      
+      // Return success response with updated user
+      res.json({
+        success: true,
+        user: updatedUser,
+        message: 'Email updated successfully'
+      });
+      
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+    
+  } catch (err) {
+    console.error('Error in email change confirmation:', err);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});

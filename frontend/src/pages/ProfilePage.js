@@ -2,12 +2,16 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { useToast } from '../App';
+import { useToast, useTheme } from '../App';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis,
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, Cell, Legend
 } from 'recharts';
+import EmailChangeModal from './EmailChangeModal';
+import UserPostsTab from './UserPostsTab';
+import ProfileSidebar from '../components/ProfileSidebar';
+import NotificationPanel from '../components/NotificationPanel';
 import './ProfilePage.css';
 
 const API = '/api';
@@ -17,6 +21,10 @@ function buildDayMap(rows) {
   rows.forEach(r => { map[r.day?.slice(0, 10)] = parseInt(r.cnt); });
   return map;
 }
+
+
+
+
 
 function buildTimeline(activity, period) {
   const days = period === 'month' ? 30 : 7;
@@ -143,10 +151,13 @@ export default function ProfilePage() {
   const { id } = useParams();
   const { user } = useAuth();
   const toast = useToast();
+  const { theme, toggleTheme } = useTheme();
   const [profile, setProfile] = useState(null);
   const [tab, setTab] = useState('stats');
   const [comments, setComments] = useState([]);
   const [views, setViews] = useState([]);
+  const [followers, setFollowers] = useState([]);
+  const [following, setFollowing] = useState([]);
   const [activity, setActivity] = useState(null);
   const [period, setPeriod] = useState('month');
   const [activityPeriod, setActivityPeriod] = useState('month');
@@ -154,9 +165,28 @@ export default function ProfilePage() {
   const [editNick, setEditNick] = useState('');
   const [editMsg, setEditMsg] = useState('');
   const [avatarPreview, setAvatarPreview] = useState(null);
+  const [showEmailModal, setShowEmailModal] = useState(false);
   const avatarRef = useRef(null);
+  const previousTheme = useRef(null);
 
   const isOwn = user && user.id === parseInt(id);
+
+  // УБРАНО: автоматическое переключение на светлую тему
+  // useEffect(() => {
+  //   const currentTheme = localStorage.getItem('theme');
+  //   if (currentTheme !== 'light') {
+  //     previousTheme.current = currentTheme;
+  //     if (theme !== 'light') {
+  //       toggleTheme();
+  //     }
+  //   }
+  //   return () => {
+  //     const currentTheme = localStorage.getItem('theme');
+  //     if (currentTheme === 'light' && previousTheme.current && previousTheme.current !== 'light') {
+  //       toggleTheme();
+  //     }
+  //   };
+  // }, []);
 
   useEffect(() => {
     setActivity(null);
@@ -171,11 +201,13 @@ export default function ProfilePage() {
   }, [id]);
 
   useEffect(() => {
-    setComments([]); setViews([]);
+    setComments([]); setViews([]); setFollowers([]); setFollowing([]);
     const saved = localStorage.getItem('activeTab');
     if (saved) { setTab(saved); localStorage.removeItem('activeTab'); }
     if (tab === 'comments') axios.get(`${API}/users/${id}/comments`).then(r => setComments(r.data)).catch(() => {});
     if (tab === 'views' && isOwn) axios.get(`${API}/users/${id}/views`).then(r => setViews(r.data)).catch(() => {});
+    if (tab === 'followers') axios.get(`${API}/users/${id}/followers`).then(r => setFollowers(r.data)).catch(() => {});
+    if (tab === 'following') axios.get(`${API}/users/${id}/following`).then(r => setFollowing(r.data)).catch(() => {});
   }, [tab, id, isOwn]);
 
   const handleSubscribe = async () => {
@@ -194,8 +226,33 @@ export default function ProfilePage() {
       setProfile(data); setEditNick(data.nick);
       setAvatarPreview(null); avatarRef.current.value = '';
       setEditMsg('Сохранено'); toast('Профиль обновлён ✓');
+      
+      // Перезагружаем страницу для обновления аватарки в навбаре
+      setTimeout(() => {
+        window.location.href = `/profile/${user.id}`;
+      }, 500);
     } catch (err) {
       setEditMsg(err.response?.status === 413 ? 'Файл слишком большой (макс. 300 МБ)' : err.response?.data?.error || 'Ошибка');
+    }
+  };
+
+  // Handle email change button click
+  const handleEmailChangeClick = (isHeaderButton = false) => {
+    if (isHeaderButton) {
+      // Header button: navigate to edit tab first
+      setTab('edit');
+      // Wait for tab change, then scroll to email field and show modal
+      setTimeout(() => {
+        const emailRow = document.querySelector('.edit-email-row');
+        if (emailRow) {
+          emailRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        // Show email change modal after navigation
+        setShowEmailModal(true);
+      }, 100);
+    } else {
+      // Edit form button: show modal directly (already on edit tab)
+      setShowEmailModal(true);
     }
   };
 
@@ -203,7 +260,10 @@ export default function ProfilePage() {
   if (!profile) return <p className="profile-loading">Загрузка...</p>;
 
   return (
-    <div className="profile-wrap">
+    <div className="profile-layout">
+      {user && <NotificationPanel />}
+      <ProfileSidebar activeTab={tab} onTabChange={setTab} isOwn={isOwn} />
+      <div className="profile-wrap">
       <div className="profile-header">
         <div className="profile-avatar-wrap">
           {profile.avatar_url
@@ -212,10 +272,10 @@ export default function ProfilePage() {
         </div>
         <div className="profile-info">
           <h1 className="profile-nick">{profile.nick}</h1>
-          {profile.role === 'admin' && <span className="profile-role-badge">👑 Администратор</span>}
+          {isOwn && profile.role === 'admin' && <span className="profile-role-badge">Администратор</span>}
           <div className="profile-email-row">
             <p className="profile-email">{profile.email}</p>
-            {isOwn && <button className="btn-email-stub" title="Изменение email — в разработке" disabled>✉ Изменить email</button>}
+            {isOwn && <button className="btn-email-change" onClick={() => handleEmailChangeClick(true)} title="Изменить email">Изменить email</button>}
           </div>
           <p className="profile-date">С нами с {new Date(profile.created_at).toLocaleDateString()}</p>
           <div className="profile-sub-counts">
@@ -230,10 +290,18 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <div className="profile-tabs">
-        {['stats', 'comments', ...(isOwn ? ['views', 'edit'] : [])].map(t => (
+      <div className="profile-tabs" style={{ display: 'none' }}>
+        {['stats', 'posts', 'followers', 'following', 'comments', ...(isOwn ? ['views', 'edit'] : [])].map(t => (
           <button key={t} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
-            {{ stats: 'Статистика', comments: 'Комментарии', views: 'Просмотренные', edit: 'Редактировать' }[t]}
+            {{ 
+              stats: 'Статистика', 
+              posts: 'Посты',
+              followers: 'Подписчики', 
+              following: 'Подписки', 
+              comments: 'Комментарии', 
+              views: 'Просмотренные', 
+              edit: 'Редактировать' 
+            }[t]}
           </button>
         ))}
       </div>
@@ -251,6 +319,10 @@ export default function ProfilePage() {
             ? <Charts activity={activity} profile={profile} period={period} setPeriod={setPeriod} activityPeriod={activityPeriod} setActivityPeriod={setActivityPeriod} />
             : <p style={{ padding: 16, color: 'var(--text-muted)' }}>Загрузка графиков...</p>}
         </div>
+      )}
+
+      {tab === 'posts' && (
+        <UserPostsTab userId={id} user={user} />
       )}
 
       {tab === 'comments' && (
@@ -284,6 +356,70 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {tab === 'followers' && (
+        <div className="profile-followers">
+          {followers.length === 0 && <p style={{ padding: 16, color: 'var(--text-muted)' }}>Нет подписчиков</p>}
+          {followers.map(f => (
+            <div key={f.id} className="profile-follower-item">
+              <Link to={`/profile/${f.id}`} className="profile-follower-link">
+                {f.avatar_url
+                  ? <img src={f.avatar_url} alt="" className="profile-follower-avatar" />
+                  : <div className="profile-follower-avatar-placeholder">{f.nick[0].toUpperCase()}</div>}
+                <div className="profile-follower-info">
+                  <span className="profile-follower-nick">{f.nick}</span>
+                  <small className="profile-follower-date">С нами с {new Date(f.created_at).toLocaleDateString()}</small>
+                </div>
+              </Link>
+              {user && user.id !== f.id && (
+                <button 
+                  className={`btn-subscribe-small ${f.is_following ? 'subscribed' : ''}`}
+                  onClick={async () => {
+                    const { data } = await axios.post(`${API}/users/${f.id}/subscribe`);
+                    setFollowers(prev => prev.map(follower => 
+                      follower.id === f.id ? { ...follower, is_following: data.subscribed } : follower
+                    ));
+                  }}
+                >
+                  {f.is_following ? 'Отписаться' : 'Подписаться'}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === 'following' && (
+        <div className="profile-following">
+          {following.length === 0 && <p style={{ padding: 16, color: 'var(--text-muted)' }}>Нет подписок</p>}
+          {following.map(f => (
+            <div key={f.id} className="profile-follower-item">
+              <Link to={`/profile/${f.id}`} className="profile-follower-link">
+                {f.avatar_url
+                  ? <img src={f.avatar_url} alt="" className="profile-follower-avatar" />
+                  : <div className="profile-follower-avatar-placeholder">{f.nick[0].toUpperCase()}</div>}
+                <div className="profile-follower-info">
+                  <span className="profile-follower-nick">{f.nick}</span>
+                  <small className="profile-follower-date">С нами с {new Date(f.created_at).toLocaleDateString()}</small>
+                </div>
+              </Link>
+              {user && user.id !== f.id && (
+                <button 
+                  className={`btn-subscribe-small ${f.is_following ? 'subscribed' : ''}`}
+                  onClick={async () => {
+                    const { data } = await axios.post(`${API}/users/${f.id}/subscribe`);
+                    setFollowing(prev => prev.map(following => 
+                      following.id === f.id ? { ...following, is_following: data.subscribed } : following
+                    ));
+                  }}
+                >
+                  {f.is_following ? 'Отписаться' : 'Подписаться'}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {tab === 'edit' && isOwn && (
         <form onSubmit={handleSaveProfile} className="profile-edit-form">
           <div>
@@ -309,14 +445,28 @@ export default function ProfilePage() {
               Email
               <input value={profile.email} disabled className="auth-input edit-email-disabled" />
             </label>
-            <button type="button" className="btn-email-change-stub" title="Изменение email — в разработке" disabled>
+            <button type="button" className="btn-email-change" onClick={() => handleEmailChangeClick(false)} title="Изменить email">
               Изменить email
             </button>
           </div>
           {editMsg && <p className={editMsg === 'Сохранено' ? 'edit-ok' : 'edit-err'}>{editMsg}</p>}
-          <button type="submit" onClick={() => { localStorage.setItem('activeTab', 'edit'); window.location.reload(); }} className="auth-btn">Сохранить</button>
+          <button type="submit" className="auth-btn">Сохранить</button>
         </form>
       )}
+
+      {/* Email Change Modal */}
+      <EmailChangeModal
+        isOpen={showEmailModal}
+        onClose={() => setShowEmailModal(false)}
+        currentEmail={profile.email}
+        onSuccess={(newEmail) => {
+          // Update profile state with new email
+          setProfile(prev => ({ ...prev, email: newEmail }));
+          // Show success toast
+          toast('Email успешно обновлён ✓');
+        }}
+      />
+      </div>
     </div>
   );
 }

@@ -34,7 +34,7 @@ export default function UsersPage() {
                 : <div className="user-avatar-placeholder">{u.nick[0].toUpperCase()}</div>}
               <div className="user-info">
                 <span className="user-nick">{u.nick}</span>
-                <span className="user-role">{u.role === 'admin' ? '👑 Администратор' : 'Пользователь'}</span>
+                {u.role === 'admin' && <span className="user-role">👑 Администратор</span>}
               </div>
             </Link>
             {user && user.id !== u.id && (
